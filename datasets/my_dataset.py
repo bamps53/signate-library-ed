@@ -73,7 +73,7 @@ class MyDataset(Dataset):
         return sample
 
     def load_image(self, image_index):
-        image_info = self.coco.loadImgs(self.image_ids[image_index])[0]
+        image_info = self.coco.loadImgs([self.image_ids[image_index]])[0]
         path = os.path.join(self.root_dir, '{}_images'.format(self.mode),
                             image_info['file_name'])
         img = cv2.imread(path)
@@ -85,7 +85,7 @@ class MyDataset(Dataset):
     def load_annotations(self, image_index):
         # get ground truth annotations
         annotations_ids = self.coco.getAnnIds(
-            imgIds=self.image_ids[image_index], iscrowd=False)
+            imgIds=[self.image_ids[image_index]], iscrowd=False)
         annotations = np.zeros((0, 5))
 
         # some images appear to miss annotations (like image with id 257034)

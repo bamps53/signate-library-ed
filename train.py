@@ -100,7 +100,7 @@ def train(train_loader, model, scheduler, optimizer, epoch, args):
     model.train()
     # model.module.is_training = True
     model.is_training = True
-    model.module.freeze_bn()
+    model.freeze_bn()
     optimizer.zero_grad()
     for idx, (images, annotations) in enumerate(train_loader):
         images = images.cuda().float()
@@ -142,7 +142,7 @@ def train(train_loader, model, scheduler, optimizer, epoch, args):
 
 def test(dataset, model, epoch, args):
     print("{} epoch: \t start validation....".format(epoch))
-    model = model.module
+    # model = model.module
     model.eval()
     model.is_training = False
     with torch.no_grad():
@@ -243,7 +243,8 @@ def main_worker(gpu, ngpus_per_node, args):
         params = checkpoint['parser']
         args.num_class = params.num_class
         args.network = params.network
-        args.start_epoch = checkpoint['epoch'] + 1
+        # args.start_epoch = checkpoint['epoch'] + 1
+        args.start_epoch = 0
         del params
 
     model = EfficientDet(num_classes=args.num_class,
@@ -253,7 +254,14 @@ def main_worker(gpu, ngpus_per_node, args):
                          D_class=EFFICIENTDET[args.network]['D_class']
                          )
     if(args.resume is not None):
-        model.load_state_dict(checkpoint['state_dict'])
+        # model.load_state_dict(checkpoint['state_dict'])
+        pretrained_dict = checkpoint['state_dict']
+        model_dict = model.state_dict()
+        # remove the keys corresponing to the linear layer in the pretrained_dict
+        pretrained_dict.pop(bbox_head.retina_cls.weight)
+        pretrained_dict.pop(bbox_head.retina_cls.bias)
+        # now update the model dict with pretrained dict
+        model_dict.update(pretrained_dict)
     del checkpoint
     if args.distributed:
         # For multiprocessing distributed, DistributedDataParallel constructor
