@@ -29,12 +29,12 @@ from torch.utils.data import DataLoader
 
 from models.efficientdet import EfficientDet
 from models.losses import FocalLoss
-from datasets import VOCDetection, CocoDataset, get_augumentation, detection_collate, Resizer, Normalizer, Augmenter, collater
+from datasets import VOCDetection, CocoDataset, get_augumentation, detection_collate, Resizer, Normalizer, Augmenter, collater, MyDataset
 from utils import EFFICIENTDET, get_state_dict
 from eval import evaluate, evaluate_coco
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-parser.add_argument('--dataset', default='VOC', choices=['VOC', 'COCO'],
+parser.add_argument('--dataset', default='VOC',
                     type=str, help='VOC or COCO')
 parser.add_argument(
     '--dataset_root',
@@ -45,11 +45,11 @@ parser.add_argument('--network', default='efficientdet-d0', type=str,
 
 parser.add_argument('--resume', default=None, type=str,
                     help='Checkpoint state_dict file to resume training from')
-parser.add_argument('--num_epoch', default=500, type=int,
+parser.add_argument('--num_epoch', default=1000, type=int,
                     help='Num epoch for training')
 parser.add_argument('--batch_size', default=32, type=int,
                     help='Batch size for training')
-parser.add_argument('--num_class', default=20, type=int,
+parser.add_argument('--num_class', default=9, type=int,
                     help='Number of class used in model')
 parser.add_argument('--device', default=[0, 1], type=list,
                     help='Use CUDA to train model')
@@ -65,7 +65,7 @@ parser.add_argument('--gamma', default=0.1, type=float,
                     help='Gamma update for SGD')
 parser.add_argument('--save_folder', default='./saved/weights/', type=str,
                     help='Directory for saving checkpoint models')
-parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
+parser.add_argument('-j', '--workers', default=0, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
@@ -98,7 +98,8 @@ def train(train_loader, model, scheduler, optimizer, epoch, args):
     start = time.time()
     total_loss = []
     model.train()
-    model.module.is_training = True
+    # model.module.is_training = True
+    model.is_training = True
     model.module.freeze_bn()
     optimizer.zero_grad()
     for idx, (images, annotations) in enumerate(train_loader):
@@ -190,6 +191,26 @@ def main_worker(gpu, ngpus_per_node, args):
         valid_dataset = CocoDataset(
             root_dir=args.dataset_root,
             set_name='val2017',
+            transform=transforms.Compose(
+                [
+                    Normalizer(),
+                    Resizer()]))
+        args.num_class = train_dataset.num_classes()
+
+    elif(args.dataset == 'MyDataset'):
+        train_dataset = MyDataset(
+            root_dir=args.dataset_root,
+            set_name='train',
+            mode='train',
+            transform=transforms.Compose(
+                [
+                    Normalizer(),
+                    Augmenter(),
+                    Resizer()]))
+        valid_dataset = MyDataset(
+            root_dir=args.dataset_root,
+            set_name='valid',
+            mode='train',
             transform=transforms.Compose(
                 [
                     Normalizer(),
@@ -305,28 +326,31 @@ def main():
                       'You may see unexpected behavior when restarting '
                       'from checkpoints.')
 
-    if args.gpu is not None:
-        warnings.warn('You have chosen a specific GPU. This will completely '
-                      'disable data parallelism.')
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
-    os.environ['WORLD_SIZE'] = '2'
-    if args.dist_url == "env://" and args.world_size == -1:
-        args.world_size = int(os.environ["WORLD_SIZE"])
+    # if args.gpu is not None:
+    #     warnings.warn('You have chosen a specific GPU. This will completely '
+    #                   'disable data parallelism.')
+    # os.environ['MASTER_ADDR'] = 'localhost'
+    # os.environ['MASTER_PORT'] = '12355'
+    # os.environ['WORLD_SIZE'] = '2'
+    # if args.dist_url == "env://" and args.world_size == -1:
+    #     args.world_size = int(os.environ["WORLD_SIZE"])
 
-    args.distributed = args.world_size > 1 or args.multiprocessing_distributed
-    ngpus_per_node = torch.cuda.device_count()
-    if args.multiprocessing_distributed:
-        # Since we have ngpus_per_node processes per node, the total world_size
-        # needs to be adjusted accordingly
-        args.world_size = ngpus_per_node * args.world_size
-        # Use torch.multiprocessing.spawn to launch distributed processes: the
-        # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node,
-                 args=(ngpus_per_node, args))
-    else:
-        # Simply call main_worker function
-        main_worker(args.gpu, ngpus_per_node, args)
+    # args.distributed = args.world_size > 1 or args.multiprocessing_distributed
+    # ngpus_per_node = torch.cuda.device_count()
+    # if args.multiprocessing_distributed:
+    #     # Since we have ngpus_per_node processes per node, the total world_size
+    #     # needs to be adjusted accordingly
+    #     args.world_size = ngpus_per_node * args.world_size
+    #     # Use torch.multiprocessing.spawn to launch distributed processes: the
+    #     # main_worker process function
+    #     mp.spawn(main_worker, nprocs=ngpus_per_node,
+    #              args=(ngpus_per_node, args))
+    # else:
+    #     # Simply call main_worker function
+    #     main_worker(args.gpu, ngpus_per_node, args)
+
+    args.distributed = False
+    main_worker(args.gpu, 1, args)
 
 
 if __name__ == "__main__":
